@@ -32,13 +32,13 @@ const DEFAULT_REQUEST_HEADERS = {
   accept: "*/*",
   "accept-language": "en-US,en;q=0.9",
   "user-agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
 };
 const DOCUMENT_REQUEST_HEADERS = {
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
   "accept-language": "en-US,en;q=0.9",
   "user-agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
 };
 const MEDIA_REQUEST_HEADERS = {
   accept: "*/*",
@@ -46,7 +46,7 @@ const MEDIA_REQUEST_HEADERS = {
   origin: "https://www.youtube.com",
   referer: "https://www.youtube.com/",
   "user-agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
 };
 const BODYLESS_METHODS = new Set(["GET", "HEAD"]);
 const MEDIA_EXTENSIONS = new Set([
