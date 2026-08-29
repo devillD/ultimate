@@ -165,9 +165,62 @@ export function validateDestinationUrl(remote) {
     return null;
 }
 
+// In-memory DNS cache to eliminate redundant OS lookups and libuv threadpool contention
+const dnsCache = new Map();
+const DNS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes TTL
+const DNS_CACHE_MAX_ENTRIES = 1000;
+
+// Periodic cleanup every 60 seconds (<100KB RAM overhead)
+const dnsCleanupTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [host, entry] of dnsCache.entries()) {
+        if (now > entry.expiresAt) {
+            dnsCache.delete(host);
+        }
+    }
+}, 60 * 1000);
+
+if (dnsCleanupTimer.unref) {
+    dnsCleanupTimer.unref();
+}
+
+// Known telemetry / analytics / tracking domains that generate useless background ping loops
+const TELEMETRY_HOSTS = new Set([
+    'collector.github.com',
+    'analytics.google.com',
+    'stats.g.doubleclick.net',
+    'play.google.com',
+    'telemetry.github.com',
+    'api.segment.io',
+    'sentry.io',
+    'browser.sentry-cdn.com',
+    'vortex.data.microsoft.com',
+    'browser.events.data.microsoft.com',
+    'bat.bing.com',
+    'clarity.ms',
+    'c.clarity.ms',
+    'analytics.tiktok.com',
+    'tr.snapchat.com',
+    'adservice.google.com',
+]);
+
+/**
+ * Checks if a host is a known telemetry, analytics, or background tracking endpoint.
+ * @param {string} host
+ * @returns {boolean}
+ */
+export function isTelemetryHost(host) {
+    if (!host || typeof host !== 'string') return false;
+    const lower = host.toLowerCase().trim();
+    if (TELEMETRY_HOSTS.has(lower)) return true;
+    if (lower.startsWith('telemetry.') || lower.startsWith('analytics.') || lower.startsWith('collector.')) return true;
+    return false;
+}
+
 /**
  * Resolves a hostname through DNS and checks all resulting IP addresses
  * against private/cloud-metadata IP ranges to prevent SSRF and DNS-rebinding attacks.
+ * Uses an in-memory cache to ensure near-zero latency for repeated domain lookups.
  *
  * @param {string} hostname - The hostname or IP to resolve and verify.
  * @returns {Promise<{safe: boolean, resolvedIp?: string, error?: Object}>}
@@ -189,6 +242,12 @@ export async function resolveAndValidateHost(hostname) {
             };
         }
         return { safe: true, resolvedIp: cleanHost };
+    }
+
+    // Check fast in-memory DNS cache
+    const cached = dnsCache.get(cleanHost);
+    if (cached && Date.now() < cached.expiresAt) {
+        return cached.result;
     }
 
     try {
@@ -220,8 +279,12 @@ export async function resolveAndValidateHost(hostname) {
             }
         }
 
-        // Return the first validated IP address for safe outbound connection
-        return { safe: true, resolvedIp: addresses[0].address };
+        // Return the first validated IP address for safe outbound connection and cache it
+        const result = { safe: true, resolvedIp: addresses[0].address };
+        if (dnsCache.size < DNS_CACHE_MAX_ENTRIES) {
+            dnsCache.set(cleanHost, { result, expiresAt: Date.now() + DNS_CACHE_TTL_MS });
+        }
+        return result;
     } catch (err) {
         return {
             safe: false,

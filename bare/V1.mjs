@@ -11,6 +11,7 @@ import {
     resolveAndValidateHost,
     sanitizeContentDisposition,
     isBlockedMimeType,
+    isTelemetryHost,
 } from './Security.mjs';
 
 const randomBytesAsync = promisify(randomBytes);
@@ -284,7 +285,15 @@ export async function v1(server, server_request) {
         return server.json(403, destError);
     }
 
-    // 2. SSRF check with pre-flight safe DNS resolution
+    // 2. Short-circuit background telemetry & analytics beacon pings
+    if (isTelemetryHost(remote.host)) {
+        response_headers['x-bare-status'] = 204;
+        response_headers['x-bare-status-text'] = 'No Content';
+        response_headers['x-bare-headers'] = JSON.stringify({});
+        return new Response(undefined, 204, response_headers);
+    }
+
+    // 3. SSRF check with pre-flight safe DNS resolution (using in-memory DNS cache)
     const dnsResult = await resolveAndValidateHost(remote.host);
     if (!dnsResult.safe) {
         return server.json(403, dnsResult.error);
@@ -332,7 +341,7 @@ export async function v1(server, server_request) {
         throw err;
     }
 
-    // 3. Download Blocking (MIME Type Check)
+    // 4. Download Blocking (MIME Type Check)
     const contentType = upstreamResponse.headers['content-type'];
     if (isBlockedMimeType(contentType)) {
         upstreamResponse.destroy(); // Cancel upstream stream immediately to save bandwidth
@@ -343,22 +352,27 @@ export async function v1(server, server_request) {
         });
     }
 
-    // 4. Sanitize Content-Disposition (Strip attachment directive)
+    // 5. Sanitize Content-Disposition (Strip attachment directive)
     if (upstreamResponse.headers['content-disposition']) {
         upstreamResponse.headers['content-disposition'] = sanitizeContentDisposition(upstreamResponse.headers['content-disposition']);
     }
 
-    // 5. Forward essential headers and Range information
+    // 6. Forward essential headers, Range, and Caching information
     for (const header in upstreamResponse.headers) {
         const lower = header.toLowerCase();
-        if (lower === 'content-encoding' || lower === 'x-content-encoding') {
-            response_headers['content-encoding'] = upstreamResponse.headers[header];
-        } else if (lower === 'content-length') {
-            response_headers['content-length'] = upstreamResponse.headers[header];
-        } else if (lower === 'content-range') {
-            response_headers['content-range'] = upstreamResponse.headers[header];
-        } else if (lower === 'accept-ranges') {
-            response_headers['accept-ranges'] = upstreamResponse.headers[header];
+        if (
+            lower === 'content-encoding' ||
+            lower === 'x-content-encoding' ||
+            lower === 'content-length' ||
+            lower === 'content-range' ||
+            lower === 'accept-ranges' ||
+            lower === 'cache-control' ||
+            lower === 'etag' ||
+            lower === 'last-modified' ||
+            lower === 'expires' ||
+            lower === 'age'
+        ) {
+            response_headers[lower] = upstreamResponse.headers[header];
         }
     }
 
@@ -367,7 +381,12 @@ export async function v1(server, server_request) {
         MapHeaderNamesFromArray(RawHeaderNames(upstreamResponse.rawHeaders), { ...upstreamResponse.headers })
     );
     response_headers['x-bare-status'] = upstreamResponse.statusCode;
-    response_headers['x-bare-status-text'] = upstreamResponse.statusMessage;
+    response_headers['x-bare-status-text'] = upstreamResponse.statusMessage || 'OK';
+
+    // 304 Not Modified optimization (zero body transfer)
+    if (upstreamResponse.statusCode === 304) {
+        return new Response(undefined, 304, response_headers);
+    }
 
     // Attach stream limiter (O(1) memory) to prevent single-stream monopolization
     const limitedStream = upstreamResponse.pipe(createStreamLimiter(MAX_STREAM_BYTES));
