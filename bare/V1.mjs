@@ -68,11 +68,19 @@ function createStreamLimiter(maxBytes = MAX_STREAM_BYTES) {
  */
 async function Fetch(server_request, request_headers, url, resolvedIp) {
     const hostHeader = (url.port && url.port !== 80 && url.port !== 443) ? `${url.host}:${url.port}` : url.host;
+    
+    // Clean hop-by-hop and conflicting headers
+    delete request_headers['connection'];
+    delete request_headers['transfer-encoding'];
+    delete request_headers['keep-alive'];
+    delete request_headers['expect'];
+    delete request_headers['upgrade'];
+    delete request_headers['host'];
     request_headers['host'] = hostHeader;
     request_headers['Host'] = hostHeader;
 
     const options = {
-        host: resolvedIp || url.host,
+        host: url.host,
         port: url.port,
         path: url.path,
         method: server_request.method,
@@ -80,7 +88,7 @@ async function Fetch(server_request, request_headers, url, resolvedIp) {
         timeout: 30000,
     };
 
-    // Ensure Server Name Indication (SNI) matches target hostname when connecting via IP
+    // Ensure Server Name Indication (SNI) matches target hostname
     if (url.protocol === 'https:') {
         options.servername = url.host;
     }
@@ -95,8 +103,14 @@ async function Fetch(server_request, request_headers, url, resolvedIp) {
         throw new RangeError(`Unsupported protocol: '${url.protocol}'`);
     }
 
-    // Pipe client request body to upstream with error handling
-    server_request.pipe(outgoing);
+    // Body handling: for bodyless methods, end immediately.
+    // For methods with body (POST, PUT, PATCH), pipe if not ended, or end if already ended.
+    const isBodyless = server_request.method === 'GET' || server_request.method === 'HEAD' || server_request.method === 'OPTIONS';
+    if (isBodyless || server_request.readableEnded) {
+        outgoing.end();
+    } else {
+        server_request.pipe(outgoing);
+    }
 
     return await new Promise((resolve, reject) => {
         outgoing.on('response', resolve);

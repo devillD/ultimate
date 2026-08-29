@@ -1,3 +1,4 @@
+import http from 'node:http';
 import { v1, v1socket, v1wsmeta, v1wsnewmeta } from './V1.mjs';
 import { Response } from './Response.mjs';
 
@@ -53,6 +54,12 @@ export default class Server {
             'access-control-allow-headers': '*',
             'access-control-allow-origin': '*',
             'access-control-expose-headers': '*',
+            'x-bare-status': status,
+            'x-bare-status-text': http.STATUS_CODES[status] || 'Error',
+            'x-bare-headers': JSON.stringify({
+                'content-type': 'application/json; charset=utf-8',
+                'content-length': String(send.byteLength),
+            }),
         });
     }
 

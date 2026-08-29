@@ -28,11 +28,16 @@ export class AddressBar {
         const trimmed = val.trim();
         if (!trimmed) return false;
 
-        // Matches http://, https://, localhost, or domain with standard TLD / dots
+        // Matches http:// or https:// scheme
         if (/^https?:\/\//i.test(trimmed)) return true;
-        if (/^[a-z0-9-]+(\.[a-z0-9-]+)+/i.test(trimmed) && !trimmed.includes(' ')) return true;
-        if (/^localhost(:\d+)?/i.test(trimmed)) return true;
-        if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(trimmed)) return true;
+
+        // If it contains spaces, it's a search query
+        if (trimmed.includes(' ')) return false;
+
+        // Matches domain with optional port and path (e.g., github.com/user/repo, example.com:8080/test)
+        if (/^([a-z0-9-]+(\.[a-z0-9-]+)+|localhost|\d{1,3}(\.\d{1,3}){3})(:\d+)?(\/.*)?$/i.test(trimmed)) {
+            return true;
+        }
 
         return false;
     }
