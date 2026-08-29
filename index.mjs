@@ -19,7 +19,7 @@ const HEAP_ALERT_THRESHOLD_MB = 160;
 
 // Subsystems
 const bare = new Server('/bare/', true);
-const rateLimiter = new RateLimiter(Number(process.env.RATE_LIMIT_PER_MINUTE) || 180);
+const rateLimiter = new RateLimiter(Number(process.env.RATE_LIMIT_PER_MINUTE) || 600);
 const adminController = new AdminController(process.env.ADMIN_SECRET || '');
 
 // Global session tracking
@@ -278,19 +278,34 @@ const server = http.createServer((request, response) => {
         return handleAdminAction(request, response);
     }
 
-    // 5. Rate Limiter check
-    const rate = rateLimiter.check(clientIp);
-    if (!rate.allowed) {
-        response.writeHead(429, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Retry-After': String(rate.retryAfter),
-        });
-        return response.end(
-            JSON.stringify({
-                error: 'Too Many Requests',
-                message: `Rate limit exceeded. Please retry after ${rate.retryAfter} seconds.`,
-            })
-        );
+    // 5. Rate Limiter check (exempt localhost loopback during local testing)
+    const isLocalhost = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === '::ffff:127.0.0.1';
+    if (!isLocalhost) {
+        const rate = rateLimiter.check(clientIp);
+        if (!rate.allowed) {
+            const sendJson = Buffer.from(
+                JSON.stringify({
+                    error: 'Too Many Requests',
+                    message: `Rate limit exceeded. Please retry after ${rate.retryAfter} seconds.`,
+                })
+            );
+            const headers = {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Content-Length': sendJson.byteLength,
+                'Retry-After': String(rate.retryAfter),
+                'x-bare-status': '429',
+                'x-bare-status-text': 'Too Many Requests',
+                'x-bare-headers': JSON.stringify({
+                    'content-type': 'application/json; charset=utf-8',
+                    'retry-after': String(rate.retryAfter),
+                }),
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': '*',
+                'Access-Control-Expose-Headers': '*',
+            };
+            response.writeHead(429, headers);
+            return response.end(sendJson);
+        }
     }
 
     // 6. Session tracking for proxy routes (/bare/ or Ultraviolet prefix /-/)
