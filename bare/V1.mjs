@@ -285,15 +285,7 @@ export async function v1(server, server_request) {
         return server.json(403, destError);
     }
 
-    // 2. Short-circuit background telemetry & analytics beacon pings
-    if (isTelemetryHost(remote.host)) {
-        response_headers['x-bare-status'] = 204;
-        response_headers['x-bare-status-text'] = 'No Content';
-        response_headers['x-bare-headers'] = JSON.stringify({});
-        return new Response(undefined, 204, response_headers);
-    }
-
-    // 3. SSRF check with pre-flight safe DNS resolution (using in-memory DNS cache)
+    // 2. SSRF check with pre-flight safe DNS resolution (using in-memory DNS cache)
     const dnsResult = await resolveAndValidateHost(remote.host);
     if (!dnsResult.safe) {
         return server.json(403, dnsResult.error);
@@ -357,7 +349,7 @@ export async function v1(server, server_request) {
         upstreamResponse.headers['content-disposition'] = sanitizeContentDisposition(upstreamResponse.headers['content-disposition']);
     }
 
-    // 6. Forward essential headers, Range, and Caching information
+    // 6. Forward transport encoding and Range headers
     for (const header in upstreamResponse.headers) {
         const lower = header.toLowerCase();
         if (
@@ -365,18 +357,18 @@ export async function v1(server, server_request) {
             lower === 'x-content-encoding' ||
             lower === 'content-length' ||
             lower === 'content-range' ||
-            lower === 'accept-ranges' ||
-            lower === 'cache-control' ||
-            lower === 'etag' ||
-            lower === 'last-modified' ||
-            lower === 'expires' ||
-            lower === 'age'
+            lower === 'accept-ranges'
         ) {
             response_headers[lower] = upstreamResponse.headers[header];
         }
     }
 
-    // Map headers back for Ultraviolet client
+    // Force no-store on the outer Bare protocol transport endpoint so the browser
+    // never caches the shared /bare/v1/ URL across different target URLs
+    response_headers['cache-control'] = 'no-store, no-cache, must-revalidate, max-age=0';
+    response_headers['pragma'] = 'no-cache';
+
+    // Map all real upstream headers for Ultraviolet client inside the iframe
     response_headers['x-bare-headers'] = JSON.stringify(
         MapHeaderNamesFromArray(RawHeaderNames(upstreamResponse.rawHeaders), { ...upstreamResponse.headers })
     );
