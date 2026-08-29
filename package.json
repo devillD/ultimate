@@ -1,0 +1,19 @@
+{
+  "name": "ultimate-browser-proxy",
+  "version": "2.0.0",
+  "description": "High-efficiency Web Proxy with Browser UI on a 256MB VM",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node test/load-test.mjs && node test/e2e-test.mjs",
+    "start": "node index.js"
+  },
+  "keywords": [
+    "proxy",
+    "ultraviolet",
+    "bare-server",
+    "browser-proxy"
+  ],
+  "author": "",
+  "license": "GPL-3.0-or-later"
+}

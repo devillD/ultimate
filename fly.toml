@@ -1,0 +1,38 @@
+# Fly.io App Configuration for 256MB Web Proxy
+app = "ultimate-browser-proxy"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  HOST = "::"
+  MAX_CONCURRENT_SESSIONS = "30"
+  MAX_CONCURRENT_WEBSOCKETS = "30"
+  RATE_LIMIT_PER_MINUTE = "180"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 30
+    soft_limit = 25
+
+  [[http_service.checks]]
+    grace_period = "5s"
+    interval = "10s"
+    method = "GET"
+    timeout = "2s"
+    path = "/healthz"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

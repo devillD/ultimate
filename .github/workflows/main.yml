@@ -1,0 +1,31 @@
+name: Docker Image CI
+
+on: workflow_dispatch
+
+#on:
+ # schedule:
+  #  - cron: '0 0 * * 5'
+ # push:
+  #  branches: [ main ]
+ # pull_request:
+  #  branches: [ main ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: docker login
+      env:
+        DOCKER_USER: 'devilldon'
+        DOCKER_PASSWORD: 'd68f8d20-f109-4265-be73-ad06bb593739'
+      run: |
+        docker login -u $DOCKER_USER -p $DOCKER_PASSWORD 
+    - name: Build the Docker image
+      run: docker build . --file Dockerfile --tag devilldon/ultimate:latest
+      
+    - name: Docker Push
+      run: docker push devilldon/ultimate:latest

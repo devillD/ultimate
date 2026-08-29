@@ -1,0 +1,36 @@
+name: Deploy to Hugging Face Spaces
+on:
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Create HF README
+        run: |
+          cat > README.md << 'EOF'
+          ---
+          title: Ultimate
+          emoji: 🚀
+          colorFrom: blue
+          colorTo: purple
+          sdk: docker
+          pinned: false
+          ---
+          EOF
+      - name: Setup Git LFS and push
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git lfs install
+          git lfs track "*.png" "*.jpg" "*.jpeg" "*.gif" "*.ico" "*.wasm" "*.woff" "*.woff2" "*.ttf" "*.eot" "*.zip"
+          git config --global user.email "deploy@github-actions.com"
+          git config --global user.name "GitHub Actions"
+          git add .gitattributes README.md
+          git commit -m "chore: add HF config and track binaries with LFS" || true
+          git lfs migrate import --include="*.png,*.jpg,*.jpeg,*.gif,*.ico,*.wasm,*.woff,*.woff2,*.ttf,*.eot,*.zip" --everything --yes
+          git remote add huggingface https://user:${HF_TOKEN}@huggingface.co/spaces/${{ secrets.HF_USERNAME }}/${{ secrets.HF_SPACE_NAME }}
+          git push huggingface main --force
