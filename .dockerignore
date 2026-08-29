@@ -1,7 +1,10 @@
 node_modules
-ssl
 test
 .git
 .github
 *.md
 .dockerignore
+.gitignore
+Dockerfile
+fly.toml
+app.json
